@@ -1,16 +1,23 @@
 /*
-Пакет database/sql — универсальный интерфейс к SQL-базам (через драйвер).
+Пакет database/sql — работа с базой данных (SQL).
 
-Зачем:   слой работы с БД в REST API — выборки, вставки, транзакции, пул соединений.
-Когда:   любой сервис с реляционной БД (PostgreSQL, MySQL, SQLite).
-Грабли:  значения подставляйте ТОЛЬКО плейсхолдерами ($1 / ?), никогда не клейте в строку запроса —
-         это SQL-инъекция. sql.Open НЕ открывает соединение (это делает первый запрос/Ping).
-         rows нужно закрывать (defer rows.Close) и проверять rows.Err() после цикла.
+⚠️ ТЕМА ПОСЛОЖНЕЕ И ТРЕБУЕТ ОТДЕЛЬНОЙ НАСТРОЙКИ. Если только начал — сперва освой остальное.
+Сюда вернись, когда захочешь хранить данные «по-взрослому» (в базе, а не в файле/памяти).
 
-ВАЖНО: database/sql сам не общается с БД — нужен драйвер «пустым» импортом, например:
-  _ "github.com/jackc/pgx/v5/stdlib"   // PostgreSQL
-  _ "modernc.org/sqlite"               // SQLite (чистый Go, без cgo)
-Файл компилируется на чистой stdlib; чтобы реально выполнить запросы, добавьте драйвер и DSN.
+Что такое база данных простыми словами: программа-хранилище, где данные лежат в таблицах
+(строки и столбцы), а достают их специальными запросами на языке SQL, например:
+    SELECT name FROM users WHERE id = 1   — «дай имя пользователя с номером 1».
+
+Важные мысли:
+  - database/sql — это ОБЩИЙ интерфейс. Сам он не знает, как говорить с конкретной базой.
+    Для этого нужен «драйвер» — отдельная библиотека под PostgreSQL, SQLite и т.п.
+  - Значения в запрос НЕЛЬЗЯ вставлять склейкой строк — только через «плейсхолдеры» ($1, ?).
+    Это защита от взлома (SQL-инъекций) и от ошибок.
+
+Этот файл КОМПИЛИРУЕТСЯ без базы, но запросы выполнит, только если задать базу (переменную DSN)
+и подключить драйвер. Здесь он показывает, КАК выглядит правильный код — его копируют в реальный проект.
+
+Как запустить:  go run main.go   (без базы просто напечатает подсказку)
 */
 package main
 
@@ -23,127 +30,80 @@ import (
 	"time"
 )
 
+// Структура под одну строку таблицы users.
 type User struct {
-	ID    int
-	Name  string
-	Email sql.NullString // колонка может быть NULL → Null-тип, а не обычная строка
+	ID   int
+	Name string
 }
 
 func main() {
-	dsn := os.Getenv("DSN")
+	dsn := os.Getenv("DSN") // адрес базы берём из переменной окружения
 	if dsn == "" {
-		// => без драйвера и DSN выполнить запросы нельзя — печатаем подсказку и выходим.
-		fmt.Println("DSN не задан. Добавьте драйвер (import _ \"...\") и DSN, чтобы запустить.")
-		fmt.Println("Ниже — канонические паттерны для реального сервиса.")
+		fmt.Println("База не настроена (нет переменной DSN).")
+		fmt.Println("Код ниже показывает, как правильно работать с базой — изучи его как образец.")
 		return
 	}
 
-	// Open создаёт ПУЛ, а не соединение. "pgx"/"sqlite" — имя, под которым драйвер себя зарегистрировал.
+	// Open готовит ПОДКЛЮЧЕНИЕ к базе. Первое имя ("pgx") — это имя драйвера.
+	// (Драйвер подключают отдельно строкой вида: import _ "github.com/jackc/pgx/v5/stdlib")
 	db, err := sql.Open("pgx", dsn)
 	if err != nil {
-		fmt.Println("open:", err)
+		fmt.Println("не смог открыть базу:", err)
 		return
 	}
-	defer db.Close()
+	defer db.Close() // закрыть подключение в конце программы
 
-	// Настройка пула обязательна в проде, иначе соединения исчерпаются.
-	db.SetMaxOpenConns(10)
-	db.SetMaxIdleConns(5)
-	db.SetConnMaxLifetime(time.Hour)
-
+	// Контекст с лимитом времени, чтобы запрос не висел вечно (см. пример context).
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	if err := db.PingContext(ctx); err != nil { // реально проверить доступность БД
-		fmt.Println("ping:", err)
-		return
-	}
-
-	queryOne(ctx, db, 1)
-	queryMany(ctx, db)
-	createUser(ctx, db, "Dave", "dave@x.io")
+	getUserByID(ctx, db, 1)
+	addUser(ctx, db, "Дима")
 }
 
-// queryOne — ОДНА строка: QueryRowContext + Scan. ErrNoRows = «не найдено» → 404.
-func queryOne(ctx context.Context, db *sql.DB, id int) {
+// Достать ОДНУ строку: QueryRowContext + Scan.
+func getUserByID(ctx context.Context, db *sql.DB, id int) {
 	var u User
-	err := db.QueryRowContext(ctx,
-		`SELECT id, name, email FROM users WHERE id = $1`, id). // $1 — плейсхолдер, защита от инъекций
-		Scan(&u.ID, &u.Name, &u.Email)
-	switch {
-	case errors.Is(err, sql.ErrNoRows):
-		fmt.Println("not found → 404")
-	case err != nil:
-		fmt.Println("query error:", err)
-	default:
-		fmt.Printf("user: %+v\n", u)
+	// $1 — плейсхолдер: вместо него БЕЗОПАСНО подставится значение id. Так делать ОБЯЗАТЕЛЬНО.
+	// Scan(&u.ID, &u.Name) кладёт значения из строки в наши переменные (& — «пиши прямо сюда»).
+	err := db.QueryRowContext(ctx, "SELECT id, name FROM users WHERE id = $1", id).
+		Scan(&u.ID, &u.Name)
+
+	if errors.Is(err, sql.ErrNoRows) {
+		fmt.Println("пользователь не найден") // строки с таким id нет
+		return
 	}
+	if err != nil {
+		fmt.Println("ошибка запроса:", err)
+		return
+	}
+	fmt.Printf("нашли: %+v\n", u)
 }
 
-// queryMany — МНОГО строк: цикл Next/Scan, обязательны Close и проверка Err после цикла.
-func queryMany(ctx context.Context, db *sql.DB) {
-	rows, err := db.QueryContext(ctx, `SELECT id, name, email FROM users ORDER BY id`)
+// Добавить строку: ExecContext (для запросов, которые НЕ возвращают данные — INSERT/UPDATE/DELETE).
+func addUser(ctx context.Context, db *sql.DB, name string) {
+	_, err := db.ExecContext(ctx, "INSERT INTO users (name) VALUES ($1)", name)
 	if err != nil {
-		fmt.Println("query error:", err)
+		fmt.Println("не смог добавить:", err)
 		return
 	}
-	defer rows.Close() // вернуть соединение в пул
-
-	var users []User
-	for rows.Next() {
-		var u User
-		if err := rows.Scan(&u.ID, &u.Name, &u.Email); err != nil {
-			fmt.Println("scan error:", err)
-			return
-		}
-		users = append(users, u)
-	}
-	if err := rows.Err(); err != nil { // ошибка могла случиться В ПРОЦЕССЕ итерации
-		fmt.Println("rows error:", err)
-		return
-	}
-	fmt.Printf("loaded %d users\n", len(users))
-}
-
-// createUser — запись в транзакции. Паттерн: Begin → defer Rollback → Commit.
-func createUser(ctx context.Context, db *sql.DB, name, email string) {
-	tx, err := db.BeginTx(ctx, nil)
-	if err != nil {
-		fmt.Println("begin:", err)
-		return
-	}
-	// defer Rollback безопасен: после успешного Commit станет no-op. Гарантирует откат при ошибке/панике.
-	defer tx.Rollback()
-
-	if _, err := tx.ExecContext(ctx,
-		`INSERT INTO users (name, email) VALUES ($1, $2)`, name, email); err != nil {
-		fmt.Println("insert:", err)
-		return
-	}
-	if err := tx.Commit(); err != nil {
-		fmt.Println("commit:", err)
-		return
-	}
-	fmt.Println("user created")
+	fmt.Println("пользователь добавлен")
 }
 
 /*
-Что запомнить (что чаще и почему):
-  • QueryRow vs Query:
-      QueryRowContext — ровно ОДНА строка (поиск по id, COUNT, EXISTS). Scan сразу, без цикла.
-                        Если строки нет — Scan вернёт sql.ErrNoRows (это и есть ваш 404).
-      QueryContext    — НЕСКОЛЬКО строк: цикл rows.Next()/rows.Scan(), потом Close + Err.
-  • Exec vs Query: Exec* — для INSERT/UPDATE/DELETE (не возвращают строк, дают кол-во затронутых через
-    Result.RowsAffected). Query* — для SELECT. Перепутать — частая ошибка.
-  • Всегда *Context-версии (ExecContext/QueryContext): пробрасывают таймаут и отмену из ctx запроса.
-    Версии без Context (Exec/Query) — только для скриптов без контекста.
-  • Плейсхолдеры различаются по драйверу: $1,$2 (Postgres/pgx) и ?,? (MySQL/SQLite). Значения —
-    только через них, НИКОГДА через fmt.Sprintf в текст запроса.
-  • Транзакция: Begin → defer tx.Rollback() → ... → tx.Commit(). defer Rollback после Commit безвреден.
-  • NULL-колонки читайте в sql.NullString/NullInt64/... — обычная строка не примет NULL и Scan упадёт.
+Что важно запомнить:
+  • База данных хранит данные в таблицах, а запросы пишут на языке SQL (SELECT/INSERT/UPDATE/DELETE).
+  • database/sql сам не умеет работать с конкретной базой — нужен ДРАЙВЕР (отдельная библиотека).
+  • Два главных метода:
+      QueryRowContext + Scan — получить ОДНУ строку (поиск по id). Нет строки -> ошибка sql.ErrNoRows.
+      ExecContext            — выполнить запрос БЕЗ результата-строк (добавить/изменить/удалить).
+  • Значения подставляй ТОЛЬКО через плейсхолдеры ($1 или ?), НИКОГДА не склеивай в текст запроса —
+    иначе откроешь дыру для взлома (SQL-инъекция).
 
-Типичные сценарии:
-  1) Получить по id:  db.QueryRowContext(ctx, "...WHERE id=$1", id).Scan(&u.ID, &u.Name)
-  2) Список:          rows, _ := db.QueryContext(ctx, "SELECT ..."); defer rows.Close(); for rows.Next() {...}
-  3) Запись:          db.ExecContext(ctx, "INSERT INTO ... VALUES ($1,$2)", a, b)
+Что встретишь позже:
+  • Query (много строк сразу), транзакции (несколько действий «всё или ничего»), настройка пула соединений.
+
+Чтобы реально запустить:
+  1) Подключи драйвер, например SQLite (чистый Go): import _ "modernc.org/sqlite", открой sql.Open("sqlite", ...).
+  2) Создай таблицу users и задай переменную DSN с адресом базы.
 */

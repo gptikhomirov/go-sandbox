@@ -1,70 +1,70 @@
 /*
-Пакет encoding/json — (де)сериализация JSON.
+Пакет encoding/json — превращение данных Go в формат JSON и обратно.
 
-Зачем:   тела HTTP-запросов и ответов, конфиги, обмен с внешними сервисами.
-Когда:   ядро REST API — почти каждый хендлер читает JSON-тело и пишет JSON-ответ.
-Грабли:  Marshal видит ТОЛЬКО экспортируемые (с большой буквы) поля — поле name с маленькой
-         не попадёт в JSON. Имена и поведение задаются тегами `json:"..."`. Без проверки ошибки
-         Unmarshal невалидный ввод «молча» оставит нулевые значения.
+JSON — это текстовый формат для обмена данными, его понимают почти все программы и сайты.
+Выглядит так:  {"name": "Alice", "age": 30}
+
+Два главных действия:
+  - Marshal:   данные Go -> текст JSON   (например, чтобы отправить или сохранить);
+  - Unmarshal: текст JSON -> данные Go   (например, чтобы прочитать пришедшие данные).
+
+Как запустить:  go run main.go
 */
 package main
 
 import (
 	"encoding/json"
 	"fmt"
-	"strings"
 )
 
-// Теги управляют JSON: имя поля, omitempty (опустить пустое), "-" (исключить полностью).
+// struct — своя структура (набор полей). Текст в кавычках после поля — это «тег»:
+// он говорит, КАК поле будет называться в JSON. Без тега имя берётся как есть (с большой буквы).
+// Важно: в JSON попадают ТОЛЬКО поля с большой буквы (экспортируемые).
 type User struct {
-	ID       int      `json:"id"`
-	Name     string   `json:"name"`
-	Email    string   `json:"email,omitempty"`
-	Password string   `json:"-"`       // никогда не попадёт в JSON
-	Roles    []string `json:"roles"`
+	Name  string `json:"name"`
+	Age   int    `json:"age"`
+	Email string `json:"email,omitempty"` // omitempty = «не выводить, если пусто»
 }
 
 func main() {
-	u := User{ID: 1, Name: "Alice", Password: "secret", Roles: []string{"admin"}}
-
-	// Marshal — struct → JSON []byte. Email пустой → опущен; Password исключён тегом.
-	data, _ := json.Marshal(u)
-	fmt.Println(string(data)) // => {"id":1,"name":"Alice","roles":["admin"]}
-
-	// MarshalIndent — человекочитаемый JSON (логи, файлы конфигурации, отладка).
-	pretty, _ := json.MarshalIndent(u, "", "  ")
-	fmt.Println(pretty != nil) // => true (вывод многострочный, опущен для краткости)
-
-	// Unmarshal — JSON → struct. Неизвестные поля игнорируются, отсутствующие остаются нулевыми.
-	var parsed User
-	if err := json.Unmarshal([]byte(`{"id":2,"name":"Bob","roles":["user"]}`), &parsed); err != nil {
-		fmt.Println("unmarshal error:", err) // на практике → 400 Bad Request
+	// Создаём значение и превращаем его в JSON. Marshal возвращает байты и ошибку.
+	u := User{Name: "Alice", Age: 30}
+	data, err := json.Marshal(u)
+	if err != nil {
+		fmt.Println("ошибка:", err)
 		return
 	}
-	fmt.Printf("%+v\n", parsed) // => {ID:2 Name:Bob Email: Password: Roles:[user]}
+	// Email пустой -> из-за omitempty его в JSON нет.
+	fmt.Println(string(data)) // => {"name":"Alice","age":30}
 
-	// Decoder — потоковое чтение из io.Reader (тело запроса, файл).
-	// DisallowUnknownFields включает строгую валидацию: лишнее поле → ошибка.
-	dec := json.NewDecoder(strings.NewReader(`{"id":3,"name":"Carol","extra":true}`))
-	dec.DisallowUnknownFields()
-	var strict User
-	fmt.Println(dec.Decode(&strict) != nil) // => true (отвергнут из-за "extra")
+	// MarshalIndent делает «красивый» JSON с отступами — удобно читать глазами.
+	pretty, _ := json.MarshalIndent(u, "", "  ")
+	fmt.Println(string(pretty))
+	// => {
+	//      "name": "Alice",
+	//      "age": 30
+	//    }
+
+	// Обратное действие: текст JSON -> структура Go.
+	// & перед переменной означает «заполни саму переменную parsed результатом».
+	input := `{"name": "Bob", "age": 25, "email": "bob@mail.com"}`
+	var parsed User
+	if err := json.Unmarshal([]byte(input), &parsed); err != nil {
+		fmt.Println("не смог разобрать JSON:", err)
+		return
+	}
+	fmt.Println(parsed.Name, parsed.Age, parsed.Email) // => Bob 25 bob@mail.com
 }
 
 /*
-Что запомнить (что чаще и почему):
-  • Marshal/Unmarshal ([]byte) vs NewEncoder/NewDecoder (io.Reader/Writer):
-      Marshal/Unmarshal — когда JSON уже в []byte/строке (или нужен []byte).
-      Encoder/Decoder   — когда работаете с ПОТОКОМ: в HTTP это идеально, т.к. ResponseWriter и
-                          r.Body — это Writer/Reader. json.NewEncoder(w).Encode(v) — стандарт для ответа,
-                          json.NewDecoder(r.Body).Decode(&v) — для запроса. Меньше аллокаций.
-  • Теги обязательны: без них имена полей пойдут как есть (Name, а не name). omitempty для опциональных,
-    "-" — чтобы скрыть пароли/внутренние поля.
-  • Всегда проверяйте ошибку Unmarshal/Decode и возвращайте 400 — иначе битый ввод даст «тихие» нули.
-  • DisallowUnknownFields — для строгих API, чтобы клиент не слал лишнее (опечатки в полях видны сразу).
+Что важно запомнить:
+  • JSON — текстовый формат обмена данными: {"ключ": значение}.
+  • Marshal: данные Go -> JSON. Unmarshal: JSON -> данные Go (передавай &переменную — её и заполнят).
+  • Теги `json:"имя"` задают, как поле зовётся в JSON. omitempty прячет пустые поля.
+  • В JSON попадают только поля с БОЛЬШОЙ буквы. Поле с маленькой буквы json просто не увидит.
+  • Всегда проверяй ошибку Unmarshal: если пришёл «битый» JSON, она подскажет, что не так.
 
-Типичные сценарии:
-  1) Ответ хендлера:  json.NewEncoder(w).Encode(resp)
-  2) Тело запроса:    if err := json.NewDecoder(r.Body).Decode(&req); err != nil { http.Error(w,"",400) }
-  3) Лог объекта:     b, _ := json.MarshalIndent(obj, "", "  "); log.Println(string(b))
+Маленькие задачи:
+  1) Добавь в User поле City с тегом `json:"city"`, заполни и посмотри на вывод Marshal.
+  2) Разбери JSON `{"name":"Ann","age":19}` в структуру и напечатай имя и возраст.
 */

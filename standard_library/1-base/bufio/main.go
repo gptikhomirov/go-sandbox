@@ -1,10 +1,13 @@
 /*
-Пакет bufio — буферизованный ввод/вывод поверх io.Reader/io.Writer.
+Пакет bufio — удобное и быстрое чтение текста по строкам/словам ("buf" = buffer, буфер).
 
-Зачем:   читать большие потоки построчно/по токенам и писать пачками, не дёргая ОС на каждый байт.
-Когда:   построчное чтение файлов и stdin, быстрый ввод в алгоритмических задачах.
-Грабли:  у Scanner есть лимит на длину строки (~64 КБ) — для длинных строк нужен Buffer();
-         у Writer данные лежат в буфере, пока не вызовешь Flush() — забыли Flush → потеряли вывод.
+Зачем нужно: когда надо прочитать ввод ПОСТРОЧНО (из файла, с клавиатуры, из любого источника текста).
+bufio.Scanner делает это просто: «пока есть строки — давай мне их по одной».
+
+Что такое «источник текста»: это может быть файл, ввод с клавиатуры (os.Stdin) или, как здесь,
+строка, обёрнутая в strings.NewReader. Scanner работает с любым из них одинаково.
+
+Как запустить:  go run main.go
 */
 package main
 
@@ -15,52 +18,41 @@ import (
 )
 
 func main() {
-	// Scanner — самый частый инструмент: читать вход построчно.
-	// Источник — strings.NewReader, но в реальности это os.Stdin или открытый файл.
-	scanner := bufio.NewScanner(strings.NewReader("alice 30\nbob 25\ncarol 41\n"))
-	for scanner.Scan() {
-		fmt.Println("line:", scanner.Text()) // строка без \n
-	}
-	// => line: alice 30 / line: bob 25 / line: carol 41
-	if err := scanner.Err(); err != nil { // ошибку проверять ОБЯЗАТЕЛЬНО после цикла
-		fmt.Println("read error:", err)
-	}
+	// Готовим «источник»: три строки текста. \n — это перевод строки.
+	text := "Аня 30\nБоря 25\nВера 41\n"
 
-	// Split задаёт способ разбиения. ScanWords — читать по словам/токенам.
-	// Идеально для задач «считать N чисел через пробел».
-	ws := bufio.NewScanner(strings.NewReader("10 20 30"))
-	ws.Split(bufio.ScanWords)
+	// NewScanner делает сканер поверх источника. Дальше — цикл «пока есть строки».
+	scanner := bufio.NewScanner(strings.NewReader(text))
+	for scanner.Scan() { // Scan() читает следующую строку и возвращает true, пока строки есть
+		line := scanner.Text() // Text() — текущая строка (без перевода строки в конце)
+		fmt.Println("строка:", line)
+	}
+	// => строка: Аня 30 / строка: Боря 25 / строка: Вера 41
+
+	// Можно читать не по строкам, а по СЛОВАМ. Для этого переключаем режим: Split(bufio.ScanWords).
+	// Удобно, когда числа/слова записаны через пробел.
+	numbers := bufio.NewScanner(strings.NewReader("10 20 30"))
+	numbers.Split(bufio.ScanWords)
+
 	sum := 0
-	for ws.Scan() {
+	for numbers.Scan() {
+		word := numbers.Text() // очередное слово, например "10"
 		var n int
-		fmt.Sscan(ws.Text(), &n)
+		fmt.Sscan(word, &n) // превращаем слово в число (& — «пиши результат в n»)
 		sum += n
 	}
-	fmt.Println("sum:", sum) // => sum: 60
-
-	// Writer — буферизует запись. Критично при большом выводе. В конце ОБЯЗАТЕЛЬНО Flush.
-	var sb strings.Builder
-	w := bufio.NewWriter(&sb)
-	for i := 0; i < 3; i++ {
-		fmt.Fprintf(w, "item-%d ", i)
-	}
-	w.Flush() // без этого sb останется пустым
-	fmt.Println(sb.String()) // => item-0 item-1 item-2
+	fmt.Println("сумма:", sum) // => сумма: 60
 }
 
 /*
-Что запомнить (что чаще и почему):
-  • bufio.Scanner vs fmt.Scan: для чтения многих строк/чисел Scanner в разы быстрее
-    (fmt.Scan медленный из-за рефлексии). В алго-задачах с большим вводом — всегда Scanner.
-  • Split-режимы: по умолчанию ScanLines (по строкам) — самый частый. ScanWords — по словам,
-    когда числа/токены разделены любыми пробелами. ScanRunes — посимвольно (редко).
-  • Scanner vs Reader.ReadString('\n'): Scanner удобнее (сам убирает \n, простой цикл).
-    ReadString берут, когда нужен разделитель, отличный от строки, или сам символ \n в данных.
-  • Writer.Flush() — главный источник «почему ничего не вывелось». Ставьте defer w.Flush()
-    сразу после создания писателя.
+Что важно запомнить:
+  • bufio.Scanner — стандартный способ читать текст ПО СТРОКАМ. Шаблон всегда один:
+        for scanner.Scan() { line := scanner.Text(); ...использовать line... }
+  • Split(bufio.ScanWords) переключает на чтение ПО СЛОВАМ (по пробелам) — удобно для чисел через пробел.
+  • Для большого ввода Scanner намного быстрее, чем читать по одному значению через fmt.Scan.
+  • Чтобы читать с клавиатуры, вместо strings.NewReader(...) подставляют os.Stdin.
 
-Типичные сценарии:
-  1) Чтение файла:   sc := bufio.NewScanner(file); for sc.Scan() { process(sc.Text()) }
-  2) Ввод чисел:     sc.Split(bufio.ScanWords); for sc.Scan() { n,_ := strconv.Atoi(sc.Text()) }
-  3) Быстрый вывод:  w := bufio.NewWriter(os.Stdout); defer w.Flush(); fmt.Fprintln(w, ...)
+Маленькие задачи:
+  1) Замени strings.NewReader(text) на os.Stdin (добавь import "os"), запусти и введи пару строк руками.
+  2) Посчитай, сколько ВСЕГО слов в строке "раз два три четыре" (режим ScanWords, считай в цикле).
 */

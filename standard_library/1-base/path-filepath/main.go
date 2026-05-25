@@ -1,10 +1,13 @@
 /*
-Пакет path/filepath — пути файловой системы (с учётом разделителя ОС).
+Пакет path/filepath — работа с путями к файлам и папкам.
 
-Зачем:   собирать пути кроссплатформенно, доставать имя/расширение, рекурсивно обходить каталоги.
-Когда:   работа с файлами и загрузками, поиск миграций/ассетов, нормализация путей из ввода.
-Грабли:  не путайте с пакетом path — тот всегда использует "/" и нужен для URL, а filepath
-         учитывает ОС (\ на Windows). НИКОГДА не склеивайте пути через "+" или вручную — только Join.
+Путь — это «адрес» файла в системе, например var/log/app.txt. Разные системы используют
+разный разделитель: Linux/Mac — "/", Windows — "\". filepath сам подставляет правильный,
+поэтому путь НИКОГДА не склеивают вручную через "+" — для этого есть filepath.Join.
+
+Зачем нужно: собрать путь, вытащить имя файла или его расширение, обойти все файлы в папке.
+
+Как запустить:  go run main.go
 */
 package main
 
@@ -15,50 +18,43 @@ import (
 )
 
 func main() {
-	// Join — собирает путь правильно: подставит / или \, уберёт лишние разделители.
-	p := filepath.Join("var", "log", "app", "server.log")
-	fmt.Println(p) // => var/log/app/server.log (на Unix)
+	// Join собирает путь из кусочков и сам ставит правильный разделитель.
+	path := filepath.Join("var", "log", "app.txt")
+	fmt.Println(path) // => var/log/app.txt (на Linux/Mac)
 
-	// Base/Dir/Ext — разбор пути. Частый случай при обработке загруженных файлов.
-	fmt.Println(filepath.Base(p)) // => server.log
-	fmt.Println(filepath.Dir(p))  // => var/log/app
-	fmt.Println(filepath.Ext(p))  // => .log
+	// Разбор пути на части:
+	fmt.Println(filepath.Base(path)) // => app.txt  (имя файла)
+	fmt.Println(filepath.Dir(path))  // => var/log  (папка)
+	fmt.Println(filepath.Ext(path))  // => .txt     (расширение)
 
-	// Abs — привести относительный путь к абсолютному (от рабочей директории).
-	abs, _ := filepath.Abs("config.yaml")
-	fmt.Println(filepath.IsAbs(abs)) // => true
+	// Создадим временную папку с парой файлов, чтобы показать обход.
+	dir, _ := os.MkdirTemp("", "demo")  // временная папка
+	defer os.RemoveAll(dir)             // defer = «выполнить в конце функции»: удалим папку при выходе
+	os.WriteFile(filepath.Join(dir, "a.txt"), nil, 0o644)
+	os.WriteFile(filepath.Join(dir, "b.log"), nil, 0o644)
 
-	// WalkDir — рекурсивный обход дерева. Типичная задача: собрать список миграций.
-	dir, _ := os.MkdirTemp("", "walk-demo")
-	defer os.RemoveAll(dir)
-	os.WriteFile(filepath.Join(dir, "001_init.sql"), nil, 0o644)
-	os.WriteFile(filepath.Join(dir, "002_users.sql"), nil, 0o644)
-
-	var sqls []string
-	filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
+	// WalkDir обходит ВСЕ файлы и подпапки. Для каждого вызывает нашу функцию.
+	// Здесь соберём только файлы с расширением .txt.
+	var txtFiles []string
+	filepath.WalkDir(dir, func(p string, d os.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
-		if !d.IsDir() && filepath.Ext(path) == ".sql" {
-			sqls = append(sqls, filepath.Base(path))
+		if !d.IsDir() && filepath.Ext(p) == ".txt" { // не папка И расширение .txt
+			txtFiles = append(txtFiles, filepath.Base(p))
 		}
-		return nil
+		return nil // nil = «продолжаем обход без ошибок»
 	})
-	fmt.Println(sqls) // => [001_init.sql 002_users.sql]
+	fmt.Println(txtFiles) // => [a.txt]
 }
 
 /*
-Что запомнить (что чаще и почему):
-  • filepath vs path: filepath — для ФАЙЛОВ (учитывает ОС-разделитель), path — для URL/слэш-путей.
-    Работаете с диском → filepath; режете URL-путь → path. Их легко перепутать.
-  • Join vs ручная склейка: Join сам разрулит разделители и ".." — склейка "+"/Sprintf
-    ломается на Windows и при двойных слэшах. Всегда Join.
-  • WalkDir vs устаревший Walk: WalkDir (Go 1.16+) быстрее — не делает Stat на каждый файл,
-    отдаёт os.DirEntry. В новом коде берут WalkDir.
-  • Base/Dir/Ext — стандартный разбор имени файла загрузки: имя + расширение для валидации типа.
+Что важно запомнить:
+  • Пути собирай через filepath.Join(...), а не склейкой строк "+": Join сам подставит "/" или "\".
+  • Base — имя файла, Dir — папка, Ext — расширение. Частый приём при работе с загруженными файлами.
+  • filepath.WalkDir обходит всю папку рекурсивно и вызывает твою функцию на каждый файл/папку.
+  • defer ставит действие «на потом» — оно выполнится, когда функция завершится (удобно для очистки).
 
-Типичные сценарии:
-  1) Путь к файлу:   p := filepath.Join(uploadDir, userID, fileName)
-  2) Расширение:     if filepath.Ext(name) != ".csv" { reject() }
-  3) Список миграций: filepath.WalkDir(migrationsDir, collectSQL)
+Маленькая задача:
+  1) Собери путь "data/users/report.csv" через Join и напечатай имя файла и его расширение.
 */

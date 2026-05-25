@@ -1,11 +1,12 @@
 /*
-Пакет strings — операции над строками.
+Пакет strings — действия со строками (текстом).
 
-Зачем:   разбор и нормализация текста, проверки, эффективная сборка строк.
-Когда:   email/логин перед записью в БД, разбор путей и заголовков, генерация текста.
-Грабли:  строки в Go неизменяемы — каждая операция возвращает НОВУЮ строку; склейка через
-         += в цикле порождает мусор, для этого есть Builder. Индексы строк — это БАЙТЫ,
-         а не символы (для Unicode см. unicode/utf8 на уровне production).
+Важно про строки в Go: их НЕЛЬЗЯ изменить «на месте». Любая операция возвращает НОВУЮ строку,
+а старая остаётся прежней. Поэтому функции strings.* всегда что-то возвращают — результат нужно сохранить.
+
+Зачем нужно: привести текст к единому виду, найти/заменить кусок, разрезать и склеить.
+
+Как запустить:  go run main.go
 */
 package main
 
@@ -15,49 +16,50 @@ import (
 )
 
 func main() {
-	// Нормализация ввода: TrimSpace + ToLower. Стандарт перед сравнением/записью email.
-	email := strings.ToLower(strings.TrimSpace("  Alice@Example.COM  "))
+	// TrimSpace убирает пробелы и переводы строк по краям. ToLower делает все буквы маленькими.
+	// Частый приём: привести email/логин к единому виду перед сравнением.
+	raw := "  Alice@Example.COM  "
+	email := strings.ToLower(strings.TrimSpace(raw))
 	fmt.Println(email) // => alice@example.com
 
-	// EqualFold — сравнение без учёта регистра (методы HTTP, имена заголовков).
-	fmt.Println(strings.EqualFold("GET", "get")) // => true
+	// Contains — есть ли подстрока внутри. HasPrefix/HasSuffix — начинается/заканчивается ли.
+	fmt.Println(strings.Contains("hello world", "world")) // => true
+	fmt.Println(strings.HasPrefix("report.txt", "report")) // => true
+	fmt.Println(strings.HasSuffix("report.txt", ".txt"))   // => true
 
-	// HasPrefix/HasSuffix/Contains — проверки для роутинга и фильтрации.
-	fmt.Println(strings.HasPrefix("/api/users", "/api")) // => true
+	// Split разрезает строку по разделителю и возвращает срез (список) кусков.
+	parts := strings.Split("a,b,c", ",")
+	fmt.Println(parts)      // => [a b c]
+	fmt.Println(parts[0])   // => a  (обращение к элементу по номеру, нумерация с 0)
 
-	// Split — разбить по разделителю; Fields — по любым пробелам (и схлопывает повторы).
-	fmt.Printf("%q\n", strings.Split("/api/users/42", "/")) // => ["" "api" "users" "42"]
-	fmt.Printf("%q\n", strings.Fields("a   b\tc"))          // => ["a" "b" "c"]
+	// Fields разрезает по пробелам (любым) и выкидывает пустые куски — удобно для слов.
+	fmt.Println(strings.Fields("один   два  три")) // => [один два три]
 
-	// Join — обратная операция: срез → строка через разделитель.
-	fmt.Println(strings.Join([]string{"id", "name"}, ",")) // => id,name
+	// Join — обратное действие: склеить список строк в одну через разделитель.
+	fmt.Println(strings.Join([]string{"2024", "03", "15"}, "-")) // => 2024-03-15
 
-	// ReplaceAll + Count — массовая замена и подсчёт.
-	tpl := "Hi {n}, code {n}"
-	fmt.Println(strings.ReplaceAll(tpl, "{n}", "Ann")) // => Hi Ann, code Ann
-	fmt.Println(strings.Count(tpl, "{n}"))             // => 2
+	// ReplaceAll заменяет ВСЕ вхождения. Count считает, сколько раз встретилось.
+	fmt.Println(strings.ReplaceAll("ля-ля-ля", "ля", "ла")) // => ла-ла-ла
+	fmt.Println(strings.Count("ля-ля-ля", "ля"))            // => 3
 
-	// Builder — эффективная сборка в цикле (вместо s += ...). Для SQL, отчётов, больших текстов.
+	// Builder — способ собирать длинную строку по кусочкам ЭФФЕКТИВНО.
+	// (Если в цикле писать s = s + "...", Go каждый раз создаёт новую строку — это медленно.)
 	var b strings.Builder
-	for i := 0; i < 3; i++ {
-		fmt.Fprintf(&b, "row%d;", i)
+	for i := 1; i <= 3; i++ {
+		// & означает «дай саму переменную b», чтобы Fprintf писал прямо в неё.
+		fmt.Fprintf(&b, "строка%d;", i)
 	}
-	fmt.Println(b.String()) // => row0;row1;row2;
+	fmt.Println(b.String()) // => строка1;строка2;строка3;
 }
 
 /*
-Что запомнить (что чаще и почему):
-  • Split vs Fields vs SplitN:
-      Split  — фиксированный разделитель (CSV, путь). Пустые части сохраняются.
-      Fields — разбить по пробелам, схлопывая повторы. Идеально для разбора пользовательского ввода.
-      SplitN — когда нужно ограничить число частей (напр. "key=value=x" → 2 части).
-  • Contains vs HasPrefix/HasSuffix: Contains — «есть где-то»; Has* — «в начале/конце».
-    Для роутинга и проверки расширений почти всегда Has*.
-  • += vs Builder: одна-две склейки — можно +=; цикл/много кусков — только Builder (нет лишних аллокаций).
-  • strings vs bytes: тот же API, но bytes для []byte (см. уровень production) — без конвертаций.
+Что важно запомнить:
+  • Строку нельзя менять «на месте» — операции возвращают новую строку, сохраняй результат.
+  • Split — резать по разделителю (a,b,c). Fields — резать по пробелам на слова.
+  • Join — склеить список строк обратно в одну.
+  • Для сборки длинного текста в цикле бери strings.Builder, а не склейку через +.
 
-Типичные сценарии:
-  1) Нормализация:  email = strings.ToLower(strings.TrimSpace(raw))
-  2) Разбор пути:   parts := strings.Split(r.URL.Path, "/")
-  3) Сборка SQL:    b.WriteString("INSERT ..."); ... ; q := b.String()
+Маленькие задачи:
+  1) Из строки "  Hello  " получи "hello" (убери пробелы и сделай маленькими буквами).
+  2) Разрежь "1;2;3" по ";" и напечатай второй элемент.
 */

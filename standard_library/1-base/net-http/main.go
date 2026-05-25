@@ -1,18 +1,23 @@
 /*
-Пакет net/http — HTTP-сервер и клиент. Ядро любого REST API на Go.
+Пакет net/http — веб-сервер и веб-клиент (то, на чём делают сайты и API).
 
-Зачем:   регистрировать маршруты/хендлеры, читать запрос, писать JSON-ответ, ходить в другие сервисы.
-Когда:   веб-сервисы и API, интеграции с внешними HTTP-эндпоинтами.
-Грабли:  заголовки (w.Header().Set) ставьте ДО WriteHeader/Write — после уже поздно. Тело ответа
-         клиента ВСЕГДА закрывайте (defer resp.Body.Close), иначе утекут соединения. http.Get без
-         таймаута может висеть вечно — в проде используйте http.Client с Timeout (см. production).
+⚠️ ТЕМА ПОСЛОЖНЕЕ. Если только начал — сначала освой fmt, strings, slices, encoding/json.
+Сюда вернись потом. Но даже сейчас полезно увидеть, как мало кода нужно для веб-сервера на Go.
 
-Пример поднимает сервер в фоне на 127.0.0.1:8099, делает к нему запрос клиентом и завершается.
+Простыми словами:
+  - СЕРВЕР — программа, которая ждёт запросы по сети и отвечает на них.
+  - ХЕНДЛЕР (обработчик) — функция, которая решает, что ответить на конкретный запрос.
+  - w (ResponseWriter) — «куда писать ОТВЕТ» клиенту.
+  - r (*Request) — пришедший ЗАПРОС (адрес, параметры, данные).
+  - КЛИЕНТ — тот, кто шлёт запрос серверу (браузер или другая программа).
+
+Этот пример: запускает маленький сервер, сам отправляет ему запрос как клиент и печатает ответ.
+
+Как запустить:  go run main.go
 */
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"io"
 	"log"
@@ -21,58 +26,51 @@ import (
 )
 
 func main() {
-	// ServeMux — стандартный роутер. С Go 1.22 понимает метод и path-параметры:
-	// "GET /users/{id}" — раньше так не умел, нужны были сторонние роутеры (chi, gorilla).
+	// mux («роутер») решает, какой хендлер вызвать для какого адреса.
 	mux := http.NewServeMux()
 
-	mux.HandleFunc("GET /users/{id}", func(w http.ResponseWriter, r *http.Request) {
-		id := r.PathValue("id")           // path-параметр {id}
-		verbose := r.URL.Query().Get("v") // query-параметр ?v=1
+	// Регистрируем хендлер: «на запрос GET по адресу /hello отвечай этой функцией».
+	// {name} в адресе — это часть пути, которую можно достать как r.PathValue("name").
+	mux.HandleFunc("GET /hello/{name}", func(w http.ResponseWriter, r *http.Request) {
+		name := r.PathValue("name") // например, из /hello/Аня достанем "Аня"
 
-		// Порядок важен: сначала заголовки, потом статус, потом тело.
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK) // 200
-
-		// ResponseWriter — это io.Writer, поэтому пишем JSON прямо в него.
-		json.NewEncoder(w).Encode(map[string]any{"id": id, "verbose": verbose})
+		// Пишем ответ клиенту. w — это io.Writer (куда писать), поэтому подходит fmt.Fprintf.
+		fmt.Fprintf(w, "Привет, %s!", name)
 	})
 
-	// Server с таймаутами — так запускают в проде (а не голый http.ListenAndServe).
-	// Запуск в горутине, чтобы main мог продолжить и сделать клиентский запрос.
-	server := &http.Server{Addr: "127.0.0.1:8099", Handler: mux, ReadHeaderTimeout: 5 * time.Second}
+	// Настраиваем сервер: на каком адресе слушать и какой роутер использовать.
+	server := &http.Server{Addr: "127.0.0.1:8099", Handler: mux}
+
+	// Запускаем сервер в ОТДЕЛЬНОЙ задаче (горутина, слово go), чтобы программа продолжила работу
+	// и смогла ниже сама сделать запрос. В обычном сервере просто пишут server.ListenAndServe().
 	go func() {
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Println("server error:", err)
+			log.Println("сервер упал:", err)
 		}
 	}()
-	time.Sleep(50 * time.Millisecond) // дать серверу подняться
+	time.Sleep(50 * time.Millisecond) // подождём, пока сервер поднимется
 
-	// Клиент: http.Get — простой GET. Тело обязательно закрываем.
-	resp, err := http.Get("http://127.0.0.1:8099/users/42?v=1")
+	// Теперь выступаем как КЛИЕНТ: отправляем серверу запрос и читаем ответ.
+	resp, err := http.Get("http://127.0.0.1:8099/hello/Аня")
 	if err != nil {
-		log.Fatal("request failed:", err)
+		log.Fatal("запрос не удался:", err)
 	}
-	defer resp.Body.Close()
+	defer resp.Body.Close() // тело ответа надо закрыть в конце (defer — «в конце функции»)
 
-	body, _ := io.ReadAll(resp.Body)
-	fmt.Println("status:", resp.StatusCode) // => status: 200
-	fmt.Printf("body: %s", body)            // => body: {"id":"42","verbose":"1"}
+	body, _ := io.ReadAll(resp.Body) // читаем весь ответ
+	fmt.Println("код ответа:", resp.StatusCode) // => код ответа: 200
+	fmt.Printf("ответ сервера: %s\n", body)      // => ответ сервера: Привет, Аня!
 }
 
 /*
-Что запомнить (что чаще и почему):
-  • ServeMux (Go 1.22+) vs сторонние роутеры: теперь stdlib сам умеет "METHOD /path/{param}"
-    и r.PathValue — для большинства API внешний роутер уже не нужен. Это главное изменение последних версий.
-  • http.Server{...} vs http.ListenAndServe(addr, h): голый ListenAndServe не задаёт таймауты
-    (Read/Write/Idle) — это уязвимость к медленным клиентам. В проде создавайте Server явно.
-  • http.Get/Post (пакетные) vs http.Client: пакетные функции используют DefaultClient БЕЗ таймаута —
-    годятся для скриптов/примеров. В сервисе заводите &http.Client{Timeout: ...} и NewRequestWithContext.
-  • Порядок записи ответа: Header().Set → WriteHeader(code) → Write(body). После первого Write
-    статус и заголовки уже отправлены.
-  • defer resp.Body.Close() — обязателен на КАЖДЫЙ успешный ответ, иначе соединения не переиспользуются.
+Что важно запомнить:
+  • Сервер слушает запросы, хендлер на них отвечает. Хендлер — это func(w http.ResponseWriter, r *http.Request).
+  • w — «куда писать ответ» (это io.Writer, поэтому работают fmt.Fprintf и json.NewEncoder(w)).
+  • r — пришедший запрос: r.PathValue("name") — часть пути, r.URL.Query().Get("x") — параметр после "?".
+  • Код 200 означает «успех». Бывают и другие: 404 — «не найдено», 400 — «неверный запрос».
+  • Когда сам делаешь запрос (http.Get) — обязательно defer resp.Body.Close().
 
-Типичные сценарии:
-  1) Ручка REST:    mux.HandleFunc("POST /users", createUser)
-  2) JSON-ответ:    w.Header().Set("Content-Type","application/json"); json.NewEncoder(w).Encode(v)
-  3) Вызов сервиса: req,_ := http.NewRequestWithContext(ctx, "GET", url, nil); resp,_ := client.Do(req)
+Маленькая задача (когда будешь готов):
+  1) Добавь второй хендлер "GET /sum/{a}/{b}", который складывает два числа из пути
+     (достань через PathValue, преврати в числа через strconv.Atoi) и отвечает суммой.
 */
