@@ -50,6 +50,10 @@ func main() {
 		)
 	})
 	fmt.Println(people) // => [{Вера 25} {Аня 30} {Боб 30}]
+
+	// ── Ещё функции пакета ──
+	// Less — простая проверка «a меньше b?» (возвращает true/false).
+	fmt.Println(cmp.Less(3, 7)) // => true
 }
 
 /*

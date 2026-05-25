@@ -44,6 +44,14 @@ func main() {
 	// Add — прибавить время. Before/After — сравнить, что раньше/позже.
 	tomorrow := now.Add(24 * time.Hour)
 	fmt.Println(now.Before(tomorrow)) // => true (сейчас раньше, чем завтра)
+
+	// ── Ещё функции пакета ──
+	d := tomorrow.Sub(now)              // Sub — разница между двумя моментами (это Duration)
+	fmt.Println(d.Hours())              // => 24
+	fmt.Println(d.Seconds() > 0)        // => true (та же длительность в секундах)
+	future := now.Add(2 * time.Hour)
+	fmt.Println(time.Until(future) > 0) // => true (Until — сколько ОСТАЛОСЬ до момента)
+	fmt.Println(future.After(now))      // => true (After — позже ли future, чем now)
 }
 
 /*

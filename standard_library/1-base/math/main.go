@@ -40,6 +40,14 @@ func main() {
 		smallest = min(smallest, v)
 	}
 	fmt.Println(smallest) // => 1
+
+	// ── Ещё функции пакета ──
+	fmt.Println(math.Trunc(2.9))           // => 2 (отбросить дробную часть)
+	fmt.Println(math.Log2(8))              // => 3 (логарифм по основанию 2)
+	fmt.Println(math.Log10(1000))          // => 3 (логарифм по основанию 10)
+	fmt.Printf("%.1f\n", math.Log(math.E)) // => 1.0 (натуральный логарифм; math.E — число e)
+	fmt.Println(math.MinInt < 0)           // => true (самое маленькое целое)
+	fmt.Printf("%.2f\n", math.Pi)          // => 3.14 (число пи)
 }
 
 /*

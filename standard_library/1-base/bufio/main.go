@@ -42,6 +42,18 @@ func main() {
 		sum += n
 	}
 	fmt.Println("сумма:", sum) // => сумма: 60
+
+	// ── Ещё функции пакета ──
+	// NewReader + ReadString читают до указанного символа (включая его). Здесь — до запятой.
+	reader := bufio.NewReader(strings.NewReader("первое,второе"))
+	part, _ := reader.ReadString(',')
+	fmt.Printf("%q\n", part) // => "первое,"
+	// Writer буферизует запись; в конце нужен Flush. Пишем в strings.Builder.
+	var out strings.Builder
+	bw := bufio.NewWriter(&out)
+	bw.WriteString("буфер ок")
+	bw.Flush() // без Flush данные не попадут в out
+	fmt.Println(out.String()) // => буфер ок
 }
 
 /*

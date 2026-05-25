@@ -46,6 +46,19 @@ func main() {
 	// Соберём полный адрес.
 	link := "https://site.com/search?" + params.Encode()
 	fmt.Println(link)
+
+	// ── Ещё функции пакета ──
+	// QueryEscape экранирует одно значение (заменяет небезопасные символы), Unescape — обратно.
+	esc := url.QueryEscape("a b&c")
+	fmt.Println(esc) // => a+b%26c
+	dec, _ := url.QueryUnescape(esc)
+	fmt.Println(dec) // => a b&c
+
+	// Add — добавить ещё одно значение к тому же ключу (Set заменяет, Add накапливает).
+	multi := url.Values{}
+	multi.Add("id", "1")
+	multi.Add("id", "2")
+	fmt.Println(multi.Encode()) // => id=1&id=2
 }
 
 /*

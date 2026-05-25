@@ -53,6 +53,18 @@ func main() {
 	// context.Background() — «пустой» начальный контекст, от него создают остальные.
 	// Обычно ctx не создают вручную, а получают «сверху» (в веб-сервере — из запроса).
 	fmt.Println("готово")
+
+	// ── Ещё функции пакета ──
+	// TODO() — временная заглушка-контекст, когда настоящий ещё «не прокинут» в функцию.
+	_ = context.TODO()
+	// WithCancel — контекст с РУЧНОЙ отменой (без времени). Вызвали cancel — пришёл сигнал Done.
+	ctx2, cancel2 := context.WithCancel(context.Background())
+	cancel2()
+	<-ctx2.Done()
+	fmt.Println("отменён вручную:", ctx2.Err()) // => отменён вручную: context canceled
+	// WithValue — привязать значение к контексту (например, id запроса) и достать через Value.
+	ctx3 := context.WithValue(context.Background(), "requestID", "abc-123")
+	fmt.Println(ctx3.Value("requestID")) // => abc-123
 }
 
 /*

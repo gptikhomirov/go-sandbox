@@ -11,7 +11,7 @@
   - r (*Request) — пришедший ЗАПРОС (адрес, параметры, данные).
   - КЛИЕНТ — тот, кто шлёт запрос серверу (браузер или другая программа).
 
-Этот пример: запускает маленький сервер, сам отправляет ему запрос как клиент и печатает ответ.
+Этот пример: запускает маленький сервер, сам отправляет ему запросы как клиент и печатает ответы.
 
 Как запустить:  go run main.go
 */
@@ -29,20 +29,38 @@ func main() {
 	// mux («роутер») решает, какой хендлер вызвать для какого адреса.
 	mux := http.NewServeMux()
 
-	// Регистрируем хендлер: «на запрос GET по адресу /hello отвечай этой функцией».
-	// {name} в адресе — это часть пути, которую можно достать как r.PathValue("name").
+	// Хендлер 1: отвечает на "GET /hello/{name}". {name} — часть пути (достаём через PathValue).
 	mux.HandleFunc("GET /hello/{name}", func(w http.ResponseWriter, r *http.Request) {
-		name := r.PathValue("name") // например, из /hello/Аня достанем "Аня"
+		name := r.PathValue("name")
 
-		// Пишем ответ клиенту. w — это io.Writer (куда писать), поэтому подходит fmt.Fprintf.
-		fmt.Fprintf(w, "Привет, %s!", name)
+		// Формируем ответ по шагам:
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8") // заголовок (ДО тела!)
+		w.WriteHeader(http.StatusOK)                                // код 200 (успех)
+		w.Write([]byte("Привет, " + name))                          // тело ответа (байты)
 	})
 
-	// Настраиваем сервер: на каком адресе слушать и какой роутер использовать.
-	server := &http.Server{Addr: "127.0.0.1:8099", Handler: mux}
+	// Хендлер 2: показывает FormValue (параметр после "?") и типовые ответы Error/NotFound/Redirect.
+	mux.HandleFunc("GET /find", func(w http.ResponseWriter, r *http.Request) {
+		q := r.FormValue("q") // значение из ?q=...
+		switch q {
+		case "":
+			http.Error(w, "параметр q обязателен", http.StatusBadRequest) // ответ с кодом 400
+		case "old":
+			http.Redirect(w, r, "/hello/new", http.StatusFound) // перенаправить на другой адрес
+		case "missing":
+			http.NotFound(w, r) // ответ 404 «не найдено»
+		default:
+			fmt.Fprintf(w, "ищем: %s", q)
+		}
+	})
 
-	// Запускаем сервер в ОТДЕЛЬНОЙ задаче (горутина, слово go), чтобы программа продолжила работу
-	// и смогла ниже сама сделать запрос. В обычном сервере просто пишут server.ListenAndServe().
+	// Эти строки просто показывают типы Handler и HandlerFunc (для справки):
+	var _ http.Handler = mux // ServeMux реализует интерфейс Handler
+	var _ http.HandlerFunc = func(w http.ResponseWriter, r *http.Request) {} // функция -> Handler
+
+	// Server — настраиваемый сервер (адрес, таймауты). Запускаем в отдельной задаче (горутина),
+	// чтобы программа продолжила работу и смогла ниже сама сделать запросы.
+	server := &http.Server{Addr: "127.0.0.1:8099", Handler: mux}
 	go func() {
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Println("сервер упал:", err)
@@ -50,27 +68,40 @@ func main() {
 	}()
 	time.Sleep(50 * time.Millisecond) // подождём, пока сервер поднимется
 
-	// Теперь выступаем как КЛИЕНТ: отправляем серверу запрос и читаем ответ.
+	// Клиент 1: http.Get — простой GET-запрос.
 	resp, err := http.Get("http://127.0.0.1:8099/hello/Аня")
 	if err != nil {
 		log.Fatal("запрос не удался:", err)
 	}
-	defer resp.Body.Close() // тело ответа надо закрыть в конце (defer — «в конце функции»)
+	body, _ := io.ReadAll(resp.Body)
+	resp.Body.Close() // тело ответа надо закрыть
+	fmt.Println("код:", resp.StatusCode)   // => код: 200
+	fmt.Printf("ответ: %s\n", body)         // => ответ: Привет, Аня
 
-	body, _ := io.ReadAll(resp.Body) // читаем весь ответ
-	fmt.Println("код ответа:", resp.StatusCode) // => код ответа: 200
-	fmt.Printf("ответ сервера: %s\n", body)      // => ответ сервера: Привет, Аня!
+	// Клиент 2: настраиваемый http.Client с таймаутом + ручной запрос через Do.
+	client := &http.Client{Timeout: 2 * time.Second}
+	req, _ := http.NewRequest("GET", "http://127.0.0.1:8099/find?q=книга", nil)
+	resp2, err := client.Do(req)
+	if err != nil {
+		log.Fatal(err)
+	}
+	body2, _ := io.ReadAll(resp2.Body)
+	resp2.Body.Close()
+	fmt.Printf("ответ2: %s\n", body2) // => ответ2: ищем: книга
 }
 
 /*
 Что важно запомнить:
   • Сервер слушает запросы, хендлер на них отвечает. Хендлер — это func(w http.ResponseWriter, r *http.Request).
-  • w — «куда писать ответ» (это io.Writer, поэтому работают fmt.Fprintf и json.NewEncoder(w)).
-  • r — пришедший запрос: r.PathValue("name") — часть пути, r.URL.Query().Get("x") — параметр после "?".
-  • Код 200 означает «успех». Бывают и другие: 404 — «не найдено», 400 — «неверный запрос».
-  • Когда сам делаешь запрос (http.Get) — обязательно defer resp.Body.Close().
+  • Ответ формируют по порядку: Header().Set(...) -> WriteHeader(код) -> Write(данные). После Write менять поздно.
+  • Из запроса читают: r.PathValue("name") — часть пути; r.FormValue("q") — параметр после "?".
+  • Типовые ответы: http.Error (код+текст), http.NotFound (404), http.Redirect (перенаправление).
+  • Коды статусов: StatusOK 200, StatusCreated 201, StatusBadRequest 400, StatusNotFound 404,
+    StatusInternalServerError 500 (и другие константы Status...).
+  • Клиент: http.Get — простой запрос; http.Client{} + Client.Do — когда нужны таймаут и настройки.
+    Тело ответа всегда закрывай: resp.Body.Close().
 
 Маленькая задача (когда будешь готов):
-  1) Добавь второй хендлер "GET /sum/{a}/{b}", который складывает два числа из пути
-     (достань через PathValue, преврати в числа через strconv.Atoi) и отвечает суммой.
+  1) Добавь хендлер "GET /sum/{a}/{b}": достань a и b через PathValue, преврати в числа (strconv.Atoi),
+     и ответь их суммой.
 */

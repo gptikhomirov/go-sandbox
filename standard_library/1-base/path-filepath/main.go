@@ -46,6 +46,11 @@ func main() {
 		return nil // nil = «продолжаем обход без ошибок»
 	})
 	fmt.Println(txtFiles) // => [a.txt]
+
+	// ── Ещё функции пакета ──
+	// Abs превращает относительный путь в абсолютный (от текущей рабочей папки).
+	abs, _ := filepath.Abs("config.yaml")
+	fmt.Println(filepath.Base(abs)) // => config.yaml (имя то же, но путь теперь абсолютный)
 }
 
 /*

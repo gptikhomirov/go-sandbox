@@ -50,6 +50,17 @@ func main() {
 		fmt.Fprintf(&b, "строка%d;", i)
 	}
 	fmt.Println(b.String()) // => строка1;строка2;строка3;
+
+	// ── Ещё функции пакета ──
+	fmt.Println(strings.ToUpper("hello"))               // => HELLO
+	fmt.Println(strings.TrimPrefix("ID-42", "ID-"))     // => 42 (убрать начало, если есть)
+	fmt.Println(strings.TrimSuffix("file.txt", ".txt")) // => file (убрать конец, если есть)
+	fmt.Println(strings.EqualFold("GET", "get"))        // => true (сравнение без учёта регистра)
+	fmt.Println(strings.Index("abcdef", "cd"))          // => 2 (позиция, с 0; если нет -> -1)
+	// NewReader превращает строку в источник (io.Reader) — нужно там, где требуется Reader.
+	var word string
+	fmt.Fscan(strings.NewReader("привет"), &word)
+	fmt.Println(word) // => привет
 }
 
 /*

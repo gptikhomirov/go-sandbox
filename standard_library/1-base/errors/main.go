@@ -53,6 +53,10 @@ func main() {
 	wrapped := fmt.Errorf("загрузка профиля: %w", ErrNotFound)
 	fmt.Println(wrapped)                       // => загрузка профиля: запись не найдена
 	fmt.Println(errors.Is(wrapped, ErrNotFound)) // => true
+
+	// ── Ещё функции пакета ──
+	// Unwrap снимает ОДИН слой обёртки и возвращает ошибку, что была внутри (или nil).
+	fmt.Println(errors.Unwrap(wrapped)) // => запись не найдена
 }
 
 /*

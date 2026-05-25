@@ -43,6 +43,19 @@ func main() {
 		return users[i].Age < users[j].Age // раньше тот, у кого возраст меньше
 	})
 	fmt.Println(users) // => [{Alice 25} {Carol 28} {Bob 30}]
+
+	// ── Ещё функции пакета ──
+	floats := []float64{2.5, 1.1, 3.3}
+	sort.Float64s(floats) // сортировка дробных чисел
+	fmt.Println(floats)   // => [1.1 2.5 3.3]
+	// SliceStable — как Slice, но сохраняет порядок РАВНЫХ (для сортировки по нескольким признакам).
+	sort.SliceStable(users, func(i, j int) bool { return users[i].Name < users[j].Name })
+	fmt.Println(users) // => [{Alice 25} {Bob 30} {Carol 28}]
+	// SearchInts — позиция числа в ОТСОРТИРОВАННОМ срезе (бинарный поиск).
+	sorted := []int{1, 3, 5, 7}
+	fmt.Println(sort.SearchInts(sorted, 5)) // => 2
+	// Search — бинарный поиск по своему условию: первый индекс, где условие истинно.
+	fmt.Println(sort.Search(len(sorted), func(i int) bool { return sorted[i] >= 4 })) // => 2
 }
 
 /*

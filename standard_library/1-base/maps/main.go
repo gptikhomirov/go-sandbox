@@ -45,6 +45,18 @@ func main() {
 		fmt.Printf("%s=%d\n", k, cloned[k])
 	}
 	// => retries=5 / timeout=60 / workers=8
+
+	// ── Ещё функции пакета ──
+	fmt.Println(maps.Equal(map[string]int{"a": 1}, map[string]int{"a": 1})) // => true
+	// Values перебирает ЗНАЧЕНИЯ словаря (порядок случайный). Сложим их.
+	sum := 0
+	for v := range maps.Values(cloned) {
+		sum += v
+	}
+	fmt.Println(sum > 0) // => true
+	// DeleteFunc удаляет пары по условию. Удалим все, где значение меньше 10.
+	maps.DeleteFunc(cloned, func(k string, v int) bool { return v < 10 })
+	fmt.Println(len(cloned) > 0) // => true
 }
 
 /*

@@ -47,6 +47,18 @@ func main() {
 		return len(a) - len(b) // короче -> раньше
 	})
 	fmt.Println(names) // => [Бо Ян Александр]
+
+	// ── Ещё функции пакета ──
+	xs := []int{1, 2, 3, 5}
+	fmt.Println(slices.IsSorted(xs)) // => true (проверка, отсортирован ли срез)
+	// BinarySearch — быстрый поиск в ОТСОРТИРОВАННОМ срезе: позиция + найдено ли.
+	pos, ok := slices.BinarySearch(xs, 3)
+	fmt.Println(pos, ok) // => 2 true
+	// Insert вставляет значения на позицию, Delete удаляет диапазон [i, j).
+	xs = slices.Insert(xs, 1, 99)
+	fmt.Println(xs) // => [1 99 2 3 5]
+	xs = slices.Delete(xs, 1, 2)
+	fmt.Println(xs) // => [1 2 3 5]
 }
 
 /*

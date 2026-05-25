@@ -48,6 +48,19 @@ func main() {
 	}
 	fmt.Printf("прочитали: %q\n", string(data)) // => прочитали: "привет, файл\n"
 
+	// ── Ещё функции пакета ──
+	// Create создаёт (или обнуляет) файл и возвращает его для потоковой записи. Close — закрыть.
+	f, _ := os.Create(path)
+	f.WriteString("вторая версия")
+	f.Close()
+	// Open открывает СУЩЕСТВУЮЩИЙ файл для чтения.
+	f2, _ := os.Open(path)
+	f2.Close()
+	// Стандартные потоки: Stdout — обычный вывод, Stderr — для ошибок, Stdin — ввод с клавиатуры.
+	fmt.Fprintln(os.Stdout, "это stdout")
+	fmt.Fprintln(os.Stderr, "это stderr")
+	_ = os.Stdin // источник для чтения с клавиатуры (см. пример bufio)
+
 	// Удалим за собой временный файл.
 	os.Remove(path)
 }

@@ -54,6 +54,14 @@ func main() {
 	// (Подробнее про ошибки — в примере пакета errors.)
 	err := fmt.Errorf("не удалось загрузить конфиг: %v", os.ErrNotExist)
 	fmt.Println(err) // => не удалось загрузить конфиг: file does not exist
+
+	// ── Ещё функции пакета (для полноты; основное — выше) ──
+	// Fscan читает значения из источника (io.Reader), разделённые пробелами.
+	var x, y int
+	fmt.Fscan(strings.NewReader("3 4"), &x, &y)
+	fmt.Println(x + y) // => 7
+	// Scan делает то же самое, но читает с КЛАВИАТУРЫ (stdin). Раскомментируй и введи два числа:
+	//   fmt.Scan(&x, &y)
 }
 
 /*

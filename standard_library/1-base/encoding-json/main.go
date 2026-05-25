@@ -15,11 +15,12 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"os"
+	"strings"
 )
 
 // struct — своя структура (набор полей). Текст в кавычках после поля — это «тег»:
-// он говорит, КАК поле будет называться в JSON. Без тега имя берётся как есть (с большой буквы).
-// Важно: в JSON попадают ТОЛЬКО поля с большой буквы (экспортируемые).
+// он говорит, КАК поле будет называться в JSON. Важно: в JSON попадают ТОЛЬКО поля с большой буквы.
 type User struct {
 	Name  string `json:"name"`
 	Age   int    `json:"age"`
@@ -27,17 +28,16 @@ type User struct {
 }
 
 func main() {
-	// Создаём значение и превращаем его в JSON. Marshal возвращает байты и ошибку.
+	// Marshal: значение Go -> JSON (в виде байтов).
 	u := User{Name: "Alice", Age: 30}
 	data, err := json.Marshal(u)
 	if err != nil {
 		fmt.Println("ошибка:", err)
 		return
 	}
-	// Email пустой -> из-за omitempty его в JSON нет.
-	fmt.Println(string(data)) // => {"name":"Alice","age":30}
+	fmt.Println(string(data)) // => {"name":"Alice","age":30}  (Email пустой -> опущен)
 
-	// MarshalIndent делает «красивый» JSON с отступами — удобно читать глазами.
+	// MarshalIndent: «красивый» JSON с отступами — удобно читать глазами.
 	pretty, _ := json.MarshalIndent(u, "", "  ")
 	fmt.Println(string(pretty))
 	// => {
@@ -45,8 +45,7 @@ func main() {
 	//      "age": 30
 	//    }
 
-	// Обратное действие: текст JSON -> структура Go.
-	// & перед переменной означает «заполни саму переменную parsed результатом».
+	// Unmarshal: текст JSON -> структура Go. & означает «заполни саму переменную parsed».
 	input := `{"name": "Bob", "age": 25, "email": "bob@mail.com"}`
 	var parsed User
 	if err := json.Unmarshal([]byte(input), &parsed); err != nil {
@@ -54,17 +53,34 @@ func main() {
 		return
 	}
 	fmt.Println(parsed.Name, parsed.Age, parsed.Email) // => Bob 25 bob@mail.com
+
+	// ── Ещё функции пакета ──
+	// Encoder пишет JSON сразу в «приёмник» (io.Writer). Удобно в вебе: писать ответ прямо клиенту.
+	// Здесь приёмник — os.Stdout (экран).
+	enc := json.NewEncoder(os.Stdout)
+	enc.Encode(User{Name: "Carol", Age: 41}) // => {"name":"Carol","age":41}
+
+	// Decoder читает JSON из «источника» (io.Reader). В вебе источник — тело запроса.
+	// Здесь источник — строка через strings.NewReader.
+	dec := json.NewDecoder(strings.NewReader(`{"name":"Dan","age":50,"extra":true}`))
+	// DisallowUnknownFields включает строгую проверку: лишнее поле "extra" -> ошибка.
+	dec.DisallowUnknownFields()
+	var strict User
+	err = dec.Decode(&strict)
+	fmt.Println(err != nil) // => true (отклонено из-за лишнего поля "extra")
 }
 
 /*
 Что важно запомнить:
   • JSON — текстовый формат обмена данными: {"ключ": значение}.
-  • Marshal: данные Go -> JSON. Unmarshal: JSON -> данные Go (передавай &переменную — её и заполнят).
-  • Теги `json:"имя"` задают, как поле зовётся в JSON. omitempty прячет пустые поля.
-  • В JSON попадают только поля с БОЛЬШОЙ буквы. Поле с маленькой буквы json просто не увидит.
-  • Всегда проверяй ошибку Unmarshal: если пришёл «битый» JSON, она подскажет, что не так.
+  • Marshal: данные Go -> JSON. Unmarshal: JSON -> данные Go (передавай &переменную — её заполнят).
+  • Теги `json:"имя"` задают имя поля в JSON. omitempty прячет пустые поля.
+  • В JSON попадают только поля с БОЛЬШОЙ буквы.
+  • Marshal/Unmarshal работают с готовым текстом; Encoder/Decoder — сразу с потоком (приёмник/источник),
+    это удобно для веба: Encoder пишет ответ, Decoder читает тело запроса.
+  • Всегда проверяй ошибку: «битый» JSON подскажет, что не так.
 
 Маленькие задачи:
-  1) Добавь в User поле City с тегом `json:"city"`, заполни и посмотри на вывод Marshal.
-  2) Разбери JSON `{"name":"Ann","age":19}` в структуру и напечатай имя и возраст.
+  1) Добавь в User поле City с тегом `json:"city"`, заполни и посмотри вывод Marshal.
+  2) Разбери JSON `{"name":"Ann","age":19}` через Unmarshal и напечатай имя и возраст.
 */
