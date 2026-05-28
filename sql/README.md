@@ -62,15 +62,17 @@ docker compose exec postgres psql -U postgres -d sandbox
 
 ## Как идёт обучение
 
-Учим SQL слоями. Базовый уровень разбит на 5 практик:
+Учим SQL слоями. Базовый уровень разбит на 5 практик — каждой соответствует папка с задачами от простого к сложному.
 
-| # | Тема                          | Ключевые конструкции                                                  | Таблицы                                          |
-|---|-------------------------------|-----------------------------------------------------------------------|--------------------------------------------------|
-| 1 | Чтение и фильтрация           | `SELECT`, `WHERE`, `AND/OR/NOT`, `IN`, `BETWEEN`, `ORDER BY`, `LIMIT` | `users`, `orders`, `products`                    |
-| 2 | NULL и текстовые фильтры      | `IS NULL`, `IS NOT NULL`, `LIKE`, `ILIKE`                             | `users`, `orders`                                |
-| 3 | Агрегаты и группировка        | `COUNT`, `SUM`, `AVG`, `MIN`, `MAX`, `GROUP BY`, `HAVING`, `FILTER`   | `users`, `orders`, `products`, `payments`, `order_items` |
-| 4 | Изменение данных              | `INSERT`, `UPDATE`, `DELETE`, `RETURNING`, `ON CONFLICT`              | `users`, `orders`, `products`, `accounts`        |
-| 5 | Простые связи и транзакции    | `JOIN`, `LEFT JOIN`, `ON`, `BEGIN/COMMIT/ROLLBACK`                    | все                                              |
+| # | Папка                           | Тема                          | Конструкции                                                            |
+|---|---------------------------------|-------------------------------|------------------------------------------------------------------------|
+| 1 | [practice-1/](./practice-1/)    | Чтение и фильтрация           | `SELECT`, `WHERE`, `AND/OR/NOT`, `IN`, `BETWEEN`, `ORDER BY`, `LIMIT`  |
+| 2 | [practice-2/](./practice-2/)    | NULL и текстовые фильтры      | `IS NULL`, `IS NOT NULL`, `LIKE`, `ILIKE`                              |
+| 3 | [practice-3/](./practice-3/)    | Агрегаты и группировка        | `COUNT`, `SUM`, `AVG`, `MIN`, `MAX`, `GROUP BY`, `HAVING`, `FILTER`    |
+| 4 | [practice-4/](./practice-4/)    | Изменение данных              | `INSERT`, `UPDATE`, `DELETE`, `RETURNING`                              |
+| 5 | [practice-5/](./practice-5/)    | Простые связи и транзакции    | `JOIN`, `LEFT JOIN`, `ON`, `BEGIN/COMMIT/ROLLBACK`                     |
+
+Внутри каждой папки — `README.md` с навигацией и нумерованные `.sql` файлы. Каждый `.sql` содержит **описание задачи** в верхнем блочном комментарии и место под решение ниже. Решение дописывай прямо в этот же файл и коммить — `git diff` покажет прогресс.
 
 Полный детальный план для LLM-наставника (с правилами проверки, production-стилем, типами задач) — в [PROMPT.md](./PROMPT.md). Скопируйте его в системный промпт любого LLM-агента (Claude / ChatGPT / Cursor / etc.) и попросите вести вас по практикам.
 
@@ -82,6 +84,11 @@ sql/
 ├── init/
 │   └── 01_schema.sql       # DROP + CREATE + INSERT для всех таблиц
 ├── PROMPT.md               # системный промпт для SQL-наставника
+├── practice-1/             # задачи + README
+├── practice-2/
+├── practice-3/
+├── practice-4/
+├── practice-5/
 └── README.md
 ```
 
