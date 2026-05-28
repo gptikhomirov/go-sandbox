@@ -20,6 +20,7 @@
 | 6 | [06-bulk-discount.sql](./06-bulk-discount.sql)             | `UPDATE` по группе строк         |
 | 7 | [07-delete-test-product.sql](./07-delete-test-product.sql) | `DELETE`                         |
 | 8 | [08-deactivate-blocked.sql](./08-deactivate-blocked.sql)   | `UPDATE` + подзапрос `IN`        |
+| 9 | [09-batch-insert-products.sql](./09-batch-insert-products.sql) | batch `INSERT` (`VALUES` с несколькими строками) |
 
 ## Перед практикой и после
 
@@ -218,3 +219,26 @@ RETURNING id, name;
 **Production-нюанс.** Если внутренний `SELECT` может вернуть очень много строк — могут быть проблемы с производительностью. Альтернатива в Postgres — `UPDATE ... FROM`, но это уже уровень 2.
 
 `RETURNING` тут особенно ценен — backend увидит точный список тех, кого затронули, и сможет, например, отправить им уведомления.
+
+---
+
+### [09. Batch INSERT — три товара одним запросом](./09-batch-insert-products.sql)
+
+**Что нового — `VALUES` с несколькими строками.** Можно вставить сразу несколько строк, перечислив их через запятую после `VALUES`:
+
+```sql
+INSERT INTO products (id, name, category, price, is_active)
+VALUES
+    (101, 'Mousepad', 'electronics', 25, true),
+    (102, 'Lamp',     'furniture',   70, true),
+    (103, 'Sticker',  'stationery',   2, true)
+RETURNING id, name;
+```
+
+Один запрос — одна транзакция — один round-trip. Гораздо быстрее, чем 3 отдельных `INSERT`.
+
+**Production-нюанс.** Это **самый частый способ массовой вставки** в backend. Если вставляешь >1000 строк за раз — есть ещё `COPY` (это уже уровень 2), но до тысяч `INSERT ... VALUES (...), (...), ...` отлично справляется.
+
+**Атомарность.** Если хоть одна строка нарушает constraint (например, `id = 101` уже есть) — **весь batch** откатывается. Все три не вставятся. Это безопасно по умолчанию.
+
+**Что попробовать.** Попробуй вставить дважды подряд — второй запуск упадёт на `duplicate key value violates unique constraint "products_pkey"`, потому что `id = 101` уже занят. Это естественное поведение `PRIMARY KEY`.

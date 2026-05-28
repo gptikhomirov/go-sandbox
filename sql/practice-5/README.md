@@ -24,6 +24,7 @@
 | 7 | [07-products-never-sold.sql](./07-products-never-sold.sql)                 | `LEFT JOIN` через `order_items`         |
 | 8 | [08-transfer-money-tx.sql](./08-transfer-money-tx.sql)                     | `BEGIN`/`COMMIT`                        |
 | 9 | [09-transfer-rollback.sql](./09-transfer-rollback.sql)                     | `ROLLBACK`                              |
+|10 | [10-anna-purchases.sql](./10-anna-purchases.sql)                           | тройной `JOIN` через таблицу-связку     |
 
 ---
 
@@ -285,3 +286,37 @@ SELECT * FROM payments WHERE id = 200;
 - **Учебная среда**: оборачивай в `BEGIN; ... ROLLBACK;` все мутации, пока учишься, чтобы не приходилось ресетить базу после каждой задачи.
 
 **Что произойдёт если забыть COMMIT/ROLLBACK.** Открытая транзакция остаётся «висеть» в сессии. Другие сессии её не видят, но: блокировки могут удерживаться, длинная транзакция мешает `VACUUM` (это уже уровень 3). В psql / GoLand при закрытии соединения незакоммиченное автоматически откатится — но в production-коде так делать нельзя.
+
+---
+
+### [10. Что купила Anna](./10-anna-purchases.sql)
+
+**Что нового — тройной JOIN через таблицу-связку.**
+
+Это типичный M:N-кейс: `orders` и `products` связаны через `order_items`. Чтобы получить «товары, купленные пользователем» — приходится склеить **четыре** таблицы: `users → orders → order_items → products`.
+
+```sql
+SELECT
+    o.id           AS order_id,
+    o.status,
+    p.name         AS product_name,
+    oi.quantity,
+    oi.unit_price
+FROM users u
+JOIN orders      o  ON o.user_id  = u.id
+JOIN order_items oi ON oi.order_id = o.id
+JOIN products    p  ON p.id        = oi.product_id
+WHERE u.name = 'Anna'
+ORDER BY o.id ASC, p.name ASC;
+```
+
+**Стиль:**
+- `JOIN`-ы идут «цепочкой»: каждый следующий присоединяет одну таблицу, ссылаясь на уже подключённые.
+- Выравнивание алиасов и `ON` помогает читать — глаз сразу видит связи.
+- Каждой таблице — короткий, узнаваемый алиас (`u`, `o`, `oi`, `p`). `oi` для `order_items` — общепринято.
+
+**Почему `order_items` хранит `unit_price`.** Цена товара может меняться со временем. В `order_items` лежит **цена на момент покупки** — иначе исторические заказы пересчитывались бы каждый раз, когда меняется `products.price`. Это стандартный паттерн «snapshot at the time of event».
+
+**Что попробовать.** Что произойдёт, если у Anna два заказа с одинаковым товаром? Сколько строк будет в выдаче? (Подсказка: одна на каждую строку в `order_items`.)
+
+**Когда нужно агрегировать.** Если хочешь «сколько Anna купила каждого товара суммарно» — добавь `GROUP BY p.id, p.name` и `SUM(oi.quantity)`. Это упражнение для самопроверки.

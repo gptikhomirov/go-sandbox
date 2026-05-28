@@ -21,6 +21,7 @@
 | 6 | [06-cities-with-multiple.sql](./06-cities-with-multiple.sql)          | `HAVING`                         |
 | 7 | [07-big-spenders.sql](./07-big-spenders.sql)                          | `GROUP BY user_id` + `HAVING SUM`|
 | 8 | [08-active-vs-inactive-by-city.sql](./08-active-vs-inactive-by-city.sql) | `FILTER`                       |
+| 9 | [09-distinct-paid-users.sql](./09-distinct-paid-users.sql)            | `COUNT(DISTINCT col)`            |
 
 ---
 
@@ -166,3 +167,23 @@ GROUP BY city;
 Это **production-стандарт в Postgres** для нескольких метрик из одной выборки. До `FILTER` писали через `COUNT(CASE WHEN ... THEN 1 END)` — теперь так делают редко.
 
 **Преимущество перед двумя запросами.** Один проход по таблице вместо двух — быстрее и меньше нагрузка на БД.
+
+---
+
+### [09. Уникальные пользователи с paid-заказами](./09-distinct-paid-users.sql)
+
+**Что нового — `COUNT(DISTINCT col)`.** Считает количество **уникальных** значений колонки (NULL отбрасывается, как у обычного `COUNT(col)`).
+
+```sql
+SELECT COUNT(DISTINCT user_id) AS unique_paid_users
+FROM orders
+WHERE status = 'paid';
+```
+
+Если у одного `user_id` пять `paid`-заказов — он посчитается **один раз**. Без `DISTINCT` получишь общее число `paid`-заказов, а не покупателей.
+
+**Где используется в реальности.** «Сколько уникальных посетителей», «сколько разных городов в базе», «MAU/DAU». Везде, где важно «штуки сущностей», а не «штуки строк».
+
+**Production-нюанс.** `COUNT(DISTINCT)` дороже обычного `COUNT(*)` — Postgres должен дедуплицировать значения. На больших таблицах иногда заменяют на approximation (`approx_count_distinct` в расширениях, HyperLogLog). Это уже уровень 3 — пока просто запомни.
+
+**Что попробовать.** Сравни результат `COUNT(*)` vs `COUNT(DISTINCT user_id)` на этом же фильтре — разница покажет, у скольких пользователей >1 paid-заказа.
