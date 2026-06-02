@@ -5,11 +5,15 @@ import (
 	"concurrency/postman"
 	"context"
 	"fmt"
+	"sync"
+	"sync/atomic"
 	"time"
 )
 
 func main() {
-	var coal int
+	var coal atomic.Int64
+
+	mtx := sync.Mutex{}
 	var mails []string
 
 	minerCtx, cancelMinerCtx := context.WithCancel(context.Background())
@@ -25,34 +29,41 @@ func main() {
 		cancelPostmanCtx()
 	}()
 
-	coalTransferPoint := miner.MinerPool(minerCtx, 2)
-	mailTransferPoint := postman.PostmanPool(postmanCtx, 4)
+	coalTransferPoint := miner.MinerPool(minerCtx, 20000)
+	mailTransferPoint := postman.PostmanPool(postmanCtx, 20000)
 
-	isCoalClosed := false
-	isMailClosed := false
-	for !isCoalClosed || !isMailClosed {
-		select {
-		case c, ok := <-coalTransferPoint:
-			if !ok {
-				isCoalClosed = true
-				continue
-			}
+	initTime := time.Now()
 
-			coal += c
+	wg := &sync.WaitGroup{}
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+
+		for c := range coalTransferPoint {
+			coal.Add(int64(c))
 			fmt.Println("Добыли ", c, " угля")
+		}
+	}()
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
 
-		case mail, ok := <-mailTransferPoint:
-			if !ok {
-				isMailClosed = true
-				continue
-			}
-
+		for mail := range mailTransferPoint {
+			mtx.Lock()
 			mails = append(mails, mail)
 			fmt.Println("Получили письмо:", mail)
+			mtx.Unlock()
 		}
-	}
+	}()
 
-	fmt.Println("Итого добыли угля:", coal)
+	wg.Wait()
+
+	fmt.Println("Итого добыли угля:", coal.Load())
+
+	mtx.Lock()
 	fmt.Println("Итого получено писем:", len(mails))
+	mtx.Unlock()
 
+	fmt.Println("Всего ушло времени:", time.Since(initTime))
 }
