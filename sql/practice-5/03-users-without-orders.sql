@@ -7,4 +7,7 @@
 **Колонки на выходе:** `u.id`, `u.name`
 */
 
--- TODO
+SELECT u.id, u.name
+FROM users u
+         LEFT JOIN orders o ON u.id = o.user_id
+WHERE o.id IS NULL;

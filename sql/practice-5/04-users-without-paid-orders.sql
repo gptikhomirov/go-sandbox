@@ -9,4 +9,15 @@
 **Колонки на выходе:** `u.id` (как `user_id`), `u.name` (как `user_name`)
 */
 
--- TODO
+-- Вариант 1 - не правильно
+-- SELECT u.id AS user_id, u.name AS user_name
+-- FROM users u
+--          LEFT JOIN orders o ON u.id = o.user_id
+-- WHERE status != 'paid'
+--    OR status ISNULL;
+
+-- Вариант 2 - правильно
+SELECT u.id AS user_id, u.name AS user_name
+FROM users u
+         LEFT JOIN orders o ON u.id = o.user_id AND o.status = 'paid'
+WHERE status ISNULL;

@@ -7,4 +7,10 @@
 **Колонки на выходе:** `o.id` (как `order_id`), `o.status`, `o.amount`, `u.name` (как `user_name`)
 */
 
--- TODO
+SELECT o.id   AS order_id,
+       o.status,
+       o.amount,
+       u.name AS user_name
+FROM orders o
+         JOIN users u ON o.user_id = u.id;
+

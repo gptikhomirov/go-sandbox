@@ -14,4 +14,10 @@
 - сортировка: `o.id ASC`, затем `p.name ASC`
 */
 
--- TODO
+SELECT o.id AS order_id, o.status, p.name AS product_name, oi.quantity, oi.unit_price
+FROM orders o
+         JOIN users u ON o.user_id = u.id
+         JOIN order_items oi ON o.id = oi.order_id
+         JOIN products p ON oi.product_id = p.id
+WHERE u.name = 'Anna'
+ORDER BY o.id, p.name;

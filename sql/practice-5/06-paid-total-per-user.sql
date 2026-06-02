@@ -6,5 +6,5 @@
 **Таблицы:** `users`, `orders`
 **Колонки на выходе:** `u.id`, `u.name`, `paid_total`
 */
-
--- TODO
+SELECT *
+FROM users

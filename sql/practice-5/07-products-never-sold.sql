@@ -7,4 +7,9 @@
 **Колонки на выходе:** `p.id`, `p.name`, `p.category`
 */
 
--- TODO
+SELECT p.id,
+       p.name,
+       p.category
+FROM products p
+         LEFT JOIN order_items oi ON p.id = oi.product_id
+WHERE oi.id IS NULL;

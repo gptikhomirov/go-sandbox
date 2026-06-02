@@ -7,4 +7,9 @@
 **Колонки на выходе:** `o.id`, `o.amount`, `u.name`, `u.email`
 */
 
--- TODO
+SELECT o.id, o.amount, u.name, u.email
+FROM orders o
+         JOIN users u ON o.user_id = u.id
+WHERE u.email IS NOT NULL
+  AND o.status = 'paid'
+ORDER BY o.amount DESC;

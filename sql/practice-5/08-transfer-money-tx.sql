@@ -12,4 +12,17 @@
 **Таблицы:** `accounts`, `payments`
 */
 
--- TODO
+BEGIN;
+
+UPDATE accounts
+SET balance = balance - 100
+WHERE id = 1;
+
+UPDATE accounts
+SET balance = balance + 100
+WHERE id = 2;
+
+INSERT INTO payments (id, from_account_id, to_account_id, amount, status, created_at)
+VALUES (11, 1, 2, 100, 'completed', CURRENT_TIMESTAMP);
+
+COMMIT;
