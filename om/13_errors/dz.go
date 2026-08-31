@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 )
 
 var (
@@ -65,6 +66,20 @@ func parseDate(date string) error {
 	return nil
 }
 
+func parseDate2(date string) error {
+	_, err := time.Parse(time.DateOnly, date)
+	if err != nil {
+		return &FieldValidationError{
+			Field:   "date",
+			Value:   date,
+			Message: fmt.Sprintf("неверный формат даты: %s", date),
+		}
+
+	}
+
+	return nil
+}
+
 func activateSubscription(userID string, date string) error {
 	users := map[string]User{
 		"1":   User{Name: "Ivan"},
@@ -72,26 +87,27 @@ func activateSubscription(userID string, date string) error {
 	}
 
 	if _, ok := users[userID]; !ok {
-		return ErrUserNotFound
+		return fmt.Errorf("activate subscription: %w", ErrUserNotFound)
 	}
 
-	if err := parseDate(date); err != nil {
-		return fmt.Errorf("invalid date: %w", err)
+	if err := parseDate2(date); err != nil {
+		return fmt.Errorf("activate subscription: %w", err)
 	}
 
 	return nil
 }
 
 func main() {
-	err := activateSubscription("1", "1234-12-22") // 2001-01-01
+	err := activateSubscription("1", "f234-12-22") // 2001-01-01
 	if err != nil {
 		if errors.Is(err, ErrUserNotFound) {
-			fmt.Println("нет такого чела")
+			fmt.Println(err)
 		}
 
-		var validationErr *FieldValidationError
-		if errors.As(err, &validationErr) {
-			fmt.Println("ошибка валидации:", validationErr.Message)
+		var ve *FieldValidationError
+		if errors.As(err, &ve) {
+			fmt.Println(err)
+			fmt.Println(ve.Message)
 		}
 	} else {
 		fmt.Println("Подписка активна")
