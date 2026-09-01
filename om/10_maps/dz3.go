@@ -21,11 +21,15 @@ func topFilms(catalog map[string]float64, min float64) []string {
 }
 
 func avgRating(catalog map[string]float64) float64 {
-	avg := 0.0
-	for _, v := range catalog {
-		avg += v
+	if len(catalog) == 0 {
+		return 0
 	}
-	return avg / float64(len(catalog))
+
+	sum := 0.0
+	for _, v := range catalog {
+		sum += v
+	}
+	return sum / float64(len(catalog))
 }
 
 func main() {
@@ -47,5 +51,7 @@ func main() {
 	fmt.Println(topFilms(catalog, 8))
 	fmt.Println(topFilms(catalog, 9))
 	fmt.Println(topFilms(catalog, 7))
+
+	fmt.Println(topFilms(map[string]float64{}, 7))
 
 }
