@@ -1,0 +1,14 @@
+[
+  {
+    "name": "valid movie 1",
+    "year": 2001
+  },
+  {
+    "name": "valid movie 2",
+    "year":2017
+  },
+  {
+    "name": "valid movie 3",
+    "year":2010
+  }
+]
